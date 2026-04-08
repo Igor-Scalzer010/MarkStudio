@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { JSONContent } from '@tiptap/core'
 import { EditorContent, useEditor } from '@tiptap/react'
@@ -16,6 +17,10 @@ import {
   writeTheme,
   type Theme,
 } from './editor/storage'
+import {
+  resolveToolbarClearance,
+  resolveViewportScrollDelta,
+} from './editor/toolbarViewport'
 
 type PromptKind = 'help' | 'image' | 'link' | 'math'
 
@@ -49,16 +54,6 @@ const getInitialTheme = (): Theme => {
   }
 
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
-const getWordCount = (content: string): number => {
-  const trimmedContent = content.trim()
-
-  if (!trimmedContent) {
-    return 0
-  }
-
-  return trimmedContent.split(/\s+/).length
 }
 
 const isEditableShortcutTarget = (target: EventTarget | null): boolean => {
@@ -102,8 +97,9 @@ function App() {
     displayMode: 'inline',
     formula: '',
   })
-  const [wordCount, setWordCount] = useState(0)
   const editorAreaRef = useRef<HTMLElement | null>(null)
+  const toolbarShellRef = useRef<HTMLDivElement | null>(null)
+  const [toolbarClearance, setToolbarClearance] = useState(160)
   const initialContent = useMemo(() => createInitialContent(), [])
 
   const editor = useEditor({
@@ -143,12 +139,8 @@ function App() {
         class: 'markstudio-editor',
       },
     },
-    onCreate: ({ editor: activeEditor }) => {
-      setWordCount(getWordCount(activeEditor.getText()))
-    },
     onUpdate: ({ editor: activeEditor }) => {
       writeEditorContent(activeEditor.getJSON())
-      setWordCount(getWordCount(activeEditor.getText()))
     },
   })
 
@@ -272,6 +264,86 @@ function App() {
     writeTheme(theme)
   }, [theme])
 
+  const syncViewportWithSelection = useEffectEvent(() => {
+    const toolbarShell = toolbarShellRef.current
+
+    if (!toolbarShell) {
+      return
+    }
+
+    const toolbarRect = toolbarShell.getBoundingClientRect()
+    const nextClearance = resolveToolbarClearance(toolbarRect.height)
+
+    setToolbarClearance((currentClearance) =>
+      currentClearance === nextClearance ? currentClearance : nextClearance,
+    )
+
+    if (!editor?.isFocused) {
+      return
+    }
+
+    let selectionBottom: number | null = null
+
+    try {
+      selectionBottom = editor.view.coordsAtPos(editor.state.selection.to).bottom
+    } catch {
+      selectionBottom = null
+    }
+
+    const scrollDelta = resolveViewportScrollDelta({
+      editorFocused: editor.isFocused,
+      selectionBottom,
+      toolbarTop: toolbarRect.top,
+    })
+
+    if (scrollDelta > 0) {
+      window.scrollBy(0, scrollDelta)
+    }
+  })
+
+  useEffect(() => {
+    let frameId = 0
+
+    const scheduleViewportSync = (): void => {
+      window.cancelAnimationFrame(frameId)
+      frameId = window.requestAnimationFrame(() => {
+        syncViewportWithSelection()
+      })
+    }
+
+    scheduleViewportSync()
+    window.addEventListener('resize', scheduleViewportSync)
+
+    const resizeObserver =
+      typeof window.ResizeObserver === 'function'
+        ? new window.ResizeObserver(() => {
+            scheduleViewportSync()
+          })
+        : null
+
+    if (toolbarShellRef.current && resizeObserver) {
+      resizeObserver.observe(toolbarShellRef.current)
+    }
+
+    if (editor) {
+      editor.on('selectionUpdate', scheduleViewportSync)
+      editor.on('update', scheduleViewportSync)
+      editor.on('focus', scheduleViewportSync)
+    }
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      window.removeEventListener('resize', scheduleViewportSync)
+      resizeObserver?.disconnect()
+
+      if (editor) {
+        editor.off('selectionUpdate', scheduleViewportSync)
+        editor.off('update', scheduleViewportSync)
+        editor.off('focus', scheduleViewportSync)
+      }
+    }
+  }, [activePrompt, editor])
+
   const toggleTheme = (): void => {
     setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))
   }
@@ -282,6 +354,10 @@ function App() {
   const focusEditor = (): void => {
     editor?.chain().focus().run()
   }
+
+  const appShellStyle = {
+    '--toolbar-clearance': `${toolbarClearance}px`,
+  } as CSSProperties
 
   const applyLink = (): void => {
     if (!editor) {
@@ -377,7 +453,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" style={appShellStyle}>
       <section className="editor-layout">
         <header className="editor-chrome">
           <div className="editor-mark">
@@ -385,10 +461,14 @@ function App() {
             <p className="editor-mark__caption">Live writing with calm formatting.</p>
           </div>
           <div className="editor-tools">
-            <div className="editor-status" aria-live="polite">
-              <span>{wordCount} words</span>
-              <span>Saved locally</span>
-            </div>
+            <button
+              aria-label="Export document"
+              className="editor-action"
+              title="Export document"
+              type="button"
+            >
+              Export
+            </button>
             <button
               aria-label={themeButtonLabel}
               className="theme-toggle"
@@ -431,6 +511,7 @@ function App() {
           editor?.chain().focus().toggleHeading({ level }).run()
         }
         onToggleOrderedList={() => editor?.chain().focus().toggleOrderedList().run()}
+        shellRef={toolbarShellRef}
       />
     </main>
   )

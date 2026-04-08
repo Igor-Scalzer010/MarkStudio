@@ -2,12 +2,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { STORAGE_KEYS } from './editor/storage'
+import {
+  resolveToolbarClearance,
+  resolveViewportScrollDelta,
+} from './editor/toolbarViewport'
 
 describe('App', () => {
   it('renders the live editor shell and floating toolbar', async () => {
     render(<App />)
 
     expect(await screen.findByLabelText('Live editor')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Export document' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'H1' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Image' })).toBeInTheDocument()
   })
@@ -55,5 +60,36 @@ describe('App', () => {
       expect(storedValue).toContain('"type":"image"')
       expect(storedValue).toContain('https://example.com/photo.jpg')
     })
+  })
+
+  it('derives bottom clearance from the current toolbar height', () => {
+    expect(resolveToolbarClearance(96)).toBe(136)
+    expect(resolveToolbarClearance(152)).toBe(192)
+  })
+
+  it('only requests viewport scroll when the focused caret enters the toolbar safety zone', () => {
+    expect(
+      resolveViewportScrollDelta({
+        editorFocused: true,
+        selectionBottom: 498,
+        toolbarTop: 520,
+      }),
+    ).toBe(18)
+
+    expect(
+      resolveViewportScrollDelta({
+        editorFocused: true,
+        selectionBottom: 470,
+        toolbarTop: 520,
+      }),
+    ).toBe(0)
+
+    expect(
+      resolveViewportScrollDelta({
+        editorFocused: false,
+        selectionBottom: 498,
+        toolbarTop: 520,
+      }),
+    ).toBe(0)
   })
 })

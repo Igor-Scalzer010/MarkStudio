@@ -1,5 +1,5 @@
 import type { Editor } from '@tiptap/react'
-import type { Dispatch, SetStateAction } from 'react'
+import type { Dispatch, RefObject, SetStateAction } from 'react'
 
 type PromptKind = 'help' | 'image' | 'link' | 'math'
 
@@ -48,6 +48,7 @@ type FloatingToolbarProps = {
   onToggleBulletList: () => void
   onToggleHeading: (level: 1 | 2 | 3) => void
   onToggleOrderedList: () => void
+  shellRef: RefObject<HTMLDivElement | null>
 }
 
 const ToolbarButton = ({
@@ -106,11 +107,12 @@ export const FloatingToolbar = ({
   onToggleBulletList,
   onToggleHeading,
   onToggleOrderedList,
+  shellRef,
 }: FloatingToolbarProps) => {
   const isDisabled = !editor
 
   return (
-    <div className="toolbar-shell">
+    <div className="toolbar-shell" ref={shellRef}>
       {activePrompt === 'link' ? (
         <section className="toolbar-panel" aria-label="Link options">
           <div className="toolbar-panel__header">
