@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   theme: 'markstudio.editor-theme',
 } as const
 
+// Tiptap expects a `doc` root, so the empty state already matches the persisted shape.
 export const createEmptyDocument = (): JSONContent => ({
   content: [
     {
@@ -16,7 +17,8 @@ export const createEmptyDocument = (): JSONContent => ({
   type: 'doc',
 })
 
-const isDocumentContent = (value: unknown): value is JSONContent => {
+// A light guard is enough here because Tiptap owns the deeper schema validation.
+export const isDocumentContent = (value: unknown): value is JSONContent => {
   if (!value || typeof value !== 'object') {
     return false
   }
@@ -26,6 +28,7 @@ const isDocumentContent = (value: unknown): value is JSONContent => {
   return candidate.type === 'doc'
 }
 
+// Invalid or stale local data should fail closed and boot the editor with a safe document.
 export const readStoredEditorContent = (): JSONContent | null => {
   try {
     const storedValue = localStorage.getItem(STORAGE_KEYS.content)

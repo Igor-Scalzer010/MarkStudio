@@ -2,9 +2,11 @@ const TOOLBAR_BASE_BOTTOM = 16
 const TOOLBAR_CLEARANCE_GUTTER = 24
 const TOOLBAR_VIEWPORT_GUTTER = 40
 
+// Clearance keeps the editor content from disappearing behind the floating dock.
 export const resolveToolbarClearance = (toolbarHeight: number): number =>
   Math.ceil(toolbarHeight + TOOLBAR_BASE_BOTTOM + TOOLBAR_CLEARANCE_GUTTER)
 
+// Scroll only the amount needed to keep the focused caret above the toolbar zone.
 export const resolveViewportScrollDelta = ({
   editorFocused,
   selectionBottom,

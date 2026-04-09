@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import type { ChangeEvent, CSSProperties } from 'react'
 import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { JSONContent } from '@tiptap/core'
 import { EditorContent, useEditor } from '@tiptap/react'
@@ -17,6 +17,12 @@ import {
   writeTheme,
   type Theme,
 } from './editor/storage'
+import {
+  createExportedDocument,
+  DocumentImportError,
+  downloadExportedDocument,
+  parseImportedDocument,
+} from './editor/transfer'
 import {
   resolveToolbarClearance,
   resolveViewportScrollDelta,
@@ -39,6 +45,16 @@ type MathDraft = {
   formula: string
 }
 
+type TransferStatus = {
+  message: string
+  tone: 'error' | 'info' | 'success'
+}
+
+// Transfer feedback should confirm the action without staying sticky in the chrome.
+const TRANSFER_STATUS_VISIBLE_MS = 3500
+
+// Keep the initial Tiptap payload stable across rerenders so the editor does not
+// reset itself after the first mount.
 const createInitialContent = (): JSONContent =>
   readStoredEditorContent() ?? createEmptyDocument()
 
@@ -91,6 +107,7 @@ const MoonIcon = () => (
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
   const [activePrompt, setActivePrompt] = useState<PromptKind | null>(null)
+  const [transferStatus, setTransferStatus] = useState<TransferStatus | null>(null)
   const [linkDraft, setLinkDraft] = useState<LinkDraft>({ label: '', url: '' })
   const [imageDraft, setImageDraft] = useState<ImageDraft>({ alt: '', url: '' })
   const [mathDraft, setMathDraft] = useState<MathDraft>({
@@ -98,8 +115,10 @@ function App() {
     formula: '',
   })
   const editorAreaRef = useRef<HTMLElement | null>(null)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
   const toolbarShellRef = useRef<HTMLDivElement | null>(null)
   const [toolbarClearance, setToolbarClearance] = useState(160)
+  // The initial document only needs to be read once, before Tiptap mounts.
   const initialContent = useMemo(() => createInitialContent(), [])
 
   const editor = useEditor({
@@ -264,6 +283,24 @@ function App() {
     writeTheme(theme)
   }, [theme])
 
+  // Import/export feedback is intentionally temporary so the chrome returns to
+  // its resting state after each file action.
+  useEffect(() => {
+    if (!transferStatus) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setTransferStatus(null)
+    }, TRANSFER_STATUS_VISIBLE_MS)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [transferStatus])
+
+  // The floating toolbar sits above the writing surface, so we nudge the
+  // viewport only when the caret drifts into that occupied zone.
   const syncViewportWithSelection = useEffectEvent(() => {
     const toolbarShell = toolbarShellRef.current
 
@@ -358,6 +395,103 @@ function App() {
   const appShellStyle = {
     '--toolbar-clearance': `${toolbarClearance}px`,
   } as CSSProperties
+
+  const openImportPicker = (): void => {
+    importInputRef.current?.click()
+  }
+
+  // Export always uses the current editor JSON so the downloaded file can be
+  // imported back without lossy Markdown conversion.
+  const exportDocument = (): void => {
+    if (!editor) {
+      setTransferStatus({
+        message: 'The editor is still loading. Try exporting again in a moment.',
+        tone: 'error',
+      })
+      return
+    }
+
+    try {
+      const fileName = downloadExportedDocument(createExportedDocument(editor.getJSON()))
+
+      setTransferStatus({
+        message: `Document exported as ${fileName}`,
+        tone: 'success',
+      })
+    } catch {
+      setTransferStatus({
+        message: 'Export failed. Try again.',
+        tone: 'error',
+      })
+    }
+  }
+
+  // Map parser-level failures to short UI feedback instead of leaking internal
+  // validation codes into the editor chrome.
+  const getImportErrorMessage = (error: unknown): string => {
+    if (!(error instanceof DocumentImportError)) {
+      return 'Import failed. Try another file.'
+    }
+
+    switch (error.code) {
+      case 'invalid-json':
+        return 'The selected file is not valid JSON.'
+      case 'unsupported-version':
+        return 'This document version is not supported yet.'
+      case 'invalid-document':
+        return 'The selected file does not contain a valid MarkStudio document.'
+      case 'unsupported-format':
+      default:
+        return 'The selected file is not a MarkStudio document.'
+    }
+  }
+
+  // Import replaces the in-memory editor content and immediately persists the
+  // restored document so the local draft stays in sync with the loaded file.
+  const importDocument = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    try {
+      const importedDocument = parseImportedDocument(await file.text())
+      const shouldReplace = window.confirm(
+        'Importing will replace the current document. Continue?',
+      )
+
+      if (!shouldReplace) {
+        setTransferStatus({
+          message: 'Import canceled.',
+          tone: 'info',
+        })
+        return
+      }
+
+      if (!editor) {
+        setTransferStatus({
+          message: 'The editor is still loading. Try importing again in a moment.',
+          tone: 'error',
+        })
+        return
+      }
+
+      editor.commands.setContent(importedDocument.document)
+      writeEditorContent(importedDocument.document)
+      setTransferStatus({
+        message: 'Document imported.',
+        tone: 'success',
+      })
+    } catch (error) {
+      setTransferStatus({
+        message: getImportErrorMessage(error),
+        tone: 'error',
+      })
+    } finally {
+      event.target.value = ''
+    }
+  }
 
   const applyLink = (): void => {
     if (!editor) {
@@ -458,28 +592,56 @@ function App() {
         <header className="editor-chrome">
           <div className="editor-mark">
             <span className="editor-mark__eyebrow">MarkStudio</span>
-            <p className="editor-mark__caption">Live writing with calm formatting.</p>
           </div>
-          <div className="editor-tools">
-            <button
-              aria-label="Export document"
-              className="editor-action"
-              title="Export document"
-              type="button"
-            >
-              Export
-            </button>
-            <button
-              aria-label={themeButtonLabel}
-              className="theme-toggle"
-              onClick={toggleTheme}
-              title={themeButtonLabel}
-              type="button"
-            >
-              <span className="theme-toggle__icon">
-                {theme === 'light' ? <SunIcon /> : <MoonIcon />}
-              </span>
-            </button>
+          <div className="editor-tools-wrap">
+            <div className="editor-tools">
+              <input
+                accept=".json,application/json"
+                aria-label="Import MarkStudio document"
+                data-testid="import-document-input"
+                hidden
+                onChange={importDocument}
+                ref={importInputRef}
+                type="file"
+              />
+              <button
+                aria-label="Import document"
+                className="editor-action"
+                onClick={openImportPicker}
+                title="Import document"
+                type="button"
+              >
+                Import
+              </button>
+              <button
+                aria-label="Export document"
+                className="editor-action"
+                onClick={exportDocument}
+                title="Export document"
+                type="button"
+              >
+                Export
+              </button>
+              <button
+                aria-label={themeButtonLabel}
+                className="theme-toggle"
+                onClick={toggleTheme}
+                title={themeButtonLabel}
+                type="button"
+              >
+                <span className="theme-toggle__icon">
+                  {theme === 'light' ? <SunIcon /> : <MoonIcon />}
+                </span>
+              </button>
+            </div>
+            {transferStatus ? (
+              <p
+                className={`editor-status editor-status--${transferStatus.tone}`}
+                role={transferStatus.tone === 'error' ? 'alert' : 'status'}
+              >
+                {transferStatus.message}
+              </p>
+            ) : null}
           </div>
         </header>
 

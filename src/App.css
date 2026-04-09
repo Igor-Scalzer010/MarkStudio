@@ -25,25 +25,22 @@
   gap: 0.45rem;
 }
 
+/* Title of the editor */
 .editor-mark__eyebrow {
   display: inline-flex;
   width: fit-content;
-  padding: 0.3rem 0.7rem;
+  padding: 0.38rem 0.82rem;
   border-radius: 999px;
   background: var(--surface-raised);
   border: 1px solid var(--border-soft);
   color: var(--text-strong);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font-family:
+    'Aptos Display', 'Segoe UI Variable Display', 'Avenir Next', 'Inter',
+    sans-serif;
+  font-size: 0.96rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.editor-mark__caption {
-  margin: 0;
-  max-width: 26rem;
-  color: var(--text-muted);
-  font-size: 0.98rem;
 }
 
 .editor-action {
@@ -67,6 +64,44 @@
   align-items: center;
   justify-content: flex-end;
   gap: 0.7rem;
+}
+
+.editor-tools-wrap {
+  display: grid;
+  justify-items: end;
+  gap: 0.7rem;
+}
+
+.editor-status {
+  margin: 0;
+  max-width: 24rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  text-align: right;
+  box-shadow: var(--shadow-soft);
+}
+
+.editor-status--success {
+  color: var(--text-strong);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-soft));
+}
+
+.editor-status--info {
+  color: var(--text-muted);
+}
+
+.editor-status--error {
+  color: #b3471c;
+  border-color: color-mix(in srgb, #d86a34 35%, var(--border-soft));
+}
+
+:root[data-theme='dark'] .editor-status--error {
+  color: #ffb489;
 }
 
 .editor-column {
@@ -489,6 +524,16 @@
 
   .editor-tools {
     flex-wrap: wrap;
+  }
+
+  .editor-tools-wrap {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .editor-status {
+    max-width: none;
+    text-align: left;
   }
 
   .markstudio-editor {

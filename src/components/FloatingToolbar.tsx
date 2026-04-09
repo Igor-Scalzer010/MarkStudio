@@ -459,8 +459,8 @@ export const FloatingToolbar = ({
         </div>
 
         <div className="toolbar-meta">
-          <span>Centered for long-form writing.</span>
-          <span>Bottom dock stays available when shortcuts are not enough.</span>
+          {/* <span>Centered for long-form writing.</span> */}
+          {/* <span>Bottom dock stays available when shortcuts are not enough.</span> */}
         </div>
       </section>
     </div>
