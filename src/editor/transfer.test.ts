@@ -7,6 +7,7 @@ import {
   downloadExportedDocument,
   EXPORTED_DOCUMENT_KIND,
   EXPORTED_DOCUMENT_VERSION,
+  isExportedDocument,
   parseImportedDocument,
   serializeExportedDocument,
 } from './transfer'
@@ -45,6 +46,36 @@ describe('transfer', () => {
       version: EXPORTED_DOCUMENT_VERSION,
     })
     expect(exportedDocument.exportedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+
+  it('recognizes a valid exported document envelope', () => {
+    expect(
+      isExportedDocument({
+        document: sampleDocument,
+        exportedAt: '2026-04-08T14:30:45.000Z',
+        kind: EXPORTED_DOCUMENT_KIND,
+        version: EXPORTED_DOCUMENT_VERSION,
+      }),
+    ).toBe(true)
+  })
+
+  it('rejects exported documents without a string exportedAt field', () => {
+    expect(
+      isExportedDocument({
+        document: sampleDocument,
+        kind: EXPORTED_DOCUMENT_KIND,
+        version: EXPORTED_DOCUMENT_VERSION,
+      }),
+    ).toBe(false)
+
+    expect(
+      isExportedDocument({
+        document: sampleDocument,
+        exportedAt: 123,
+        kind: EXPORTED_DOCUMENT_KIND,
+        version: EXPORTED_DOCUMENT_VERSION,
+      }),
+    ).toBe(false)
   })
 
   it('parses a valid exported document', () => {
@@ -110,14 +141,35 @@ describe('transfer', () => {
     ).toThrowError(new DocumentImportError('invalid-document'))
   })
 
+  it('rejects payloads that omit exportedAt', () => {
+    expect(() =>
+      parseImportedDocument(
+        JSON.stringify({
+          document: sampleDocument,
+          kind: EXPORTED_DOCUMENT_KIND,
+          version: EXPORTED_DOCUMENT_VERSION,
+        }),
+      ),
+    ).toThrowError(new DocumentImportError('unsupported-format'))
+  })
+
   it('builds a stable export file name from the export timestamp', () => {
     expect(createExportFileName('2026-04-08T14:30:45.000Z')).toBe(
       'markstudio-20260408-143045.json',
     )
   })
 
+  it('falls back to the current clock when the export timestamp is invalid', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-11T09:08:07.000Z'))
+
+    expect(createExportFileName('not-a-date')).toBe('markstudio-20260411-090807.json')
+  })
+
   it('downloads the serialized document as a JSON file', async () => {
-    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {})
     const appendSpy = vi.spyOn(document.body, 'append')
     const exportedDocument = {
       document: sampleDocument,
@@ -134,6 +186,8 @@ describe('transfer', () => {
     expect(anchorClick).toHaveBeenCalledTimes(1)
     expect(appendSpy).toHaveBeenCalledTimes(1)
 
+    // Inspect the Blob directly so this test protects the exported file contract,
+    // not only the download side effects.
     const blob = vi.mocked(URL.createObjectURL).mock.calls[0]?.[0]
     const downloadedBlob = blob as Blob
 
