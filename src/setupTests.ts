@@ -23,6 +23,8 @@ Object.defineProperty(URL, 'revokeObjectURL', {
 afterEach(() => {
   cleanup()
   localStorage.clear()
+  // Some tests use fake timers for transient UI state; always reset them here
+  // so later editor tests don't inherit a stalled clock.
   vi.useRealTimers()
   vi.clearAllMocks()
   vi.restoreAllMocks()
