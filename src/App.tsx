@@ -8,6 +8,7 @@ import { Placeholder } from '@tiptap/extensions'
 import 'katex/dist/katex.min.css'
 import './App.css'
 import { FloatingToolbar } from './components/FloatingToolbar'
+import { SelectionBubbleMenu } from './components/SelectionBubbleMenu'
 import { BlockMath, InlineMath } from './editor/extensions/math'
 import {
   createEmptyDocument,
@@ -125,7 +126,6 @@ function App() {
     immediatelyRender: true,
     extensions: [
       StarterKit.configure({
-        blockquote: false,
         code: false,
         codeBlock: false,
         heading: {
@@ -392,6 +392,10 @@ function App() {
     editor?.chain().focus().run()
   }
 
+  const toggleBlockquote = (): void => {
+    editor?.chain().focus().toggleBlockquote().run()
+  }
+
   const appShellStyle = {
     '--toolbar-clearance': `${toolbarClearance}px`,
   } as CSSProperties
@@ -646,7 +650,16 @@ function App() {
         </header>
 
         <section className="editor-column" ref={editorAreaRef}>
-          {editor ? <EditorContent editor={editor} /> : null}
+          {editor ? (
+            <>
+              <SelectionBubbleMenu
+                editor={editor}
+                isPromptOpen={activePrompt !== null}
+                onToggleBlockquote={toggleBlockquote}
+              />
+              <EditorContent editor={editor} />
+            </>
+          ) : null}
         </section>
       </section>
 

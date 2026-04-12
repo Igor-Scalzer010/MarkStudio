@@ -8,6 +8,27 @@ import {
 import userEvent from '@testing-library/user-event'
 import type { JSONContent } from '@tiptap/core'
 import { vi } from 'vitest'
+
+// The selection bubble itself has dedicated component tests. Here we replace it
+// with a thin trigger so App coverage stays focused on editor integration.
+vi.mock('./components/SelectionBubbleMenu', () => ({
+  SelectionBubbleMenu: ({
+    onToggleBlockquote,
+  }: {
+    onToggleBlockquote: () => void
+  }) => (
+    <button
+      onClick={onToggleBlockquote}
+      onMouseDown={(event) => {
+        event.preventDefault()
+      }}
+      type="button"
+    >
+      Blockquote
+    </button>
+  ),
+}))
+
 import App from './App'
 import { STORAGE_KEYS } from './editor/storage'
 import {
@@ -244,6 +265,37 @@ describe('App', () => {
       expect(storedValue).not.toBeNull()
       expect(storedValue).toContain('"type":"blockMath"')
       expect(storedValue).toContain('a^2+b^2=c^2')
+    })
+  })
+
+  it('toggles blockquote formatting from the selection menu trigger and persists it', async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.content,
+      JSON.stringify({
+        content: [
+          {
+            content: [{ text: 'Quoted draft', type: 'text' }],
+            type: 'paragraph',
+          },
+        ],
+        type: 'doc',
+      }),
+    )
+
+    render(<App />)
+
+    await focusEditor()
+    await userEvent.click(await screen.findByRole('button', { name: 'Blockquote' }))
+
+    await waitFor(() => {
+      expect(localStorage.getItem(STORAGE_KEYS.content)).toContain('"type":"blockquote"')
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Blockquote' }))
+
+    await waitFor(() => {
+      expect(localStorage.getItem(STORAGE_KEYS.content)).not.toContain('"type":"blockquote"')
+      expect(localStorage.getItem(STORAGE_KEYS.content)).toContain('Quoted draft')
     })
   })
 
