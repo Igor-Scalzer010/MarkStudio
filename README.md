@@ -1,6 +1,6 @@
-# 📝 MarkStudio
-
 ![React](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white) ![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=flat&logo=vite&logoColor=white)
+
+# 📝 MarkStudio
 
 MarkStudio is evolving into a single-screen live writing editor. The current app is already editor-first: the writing surface is the product, formatting happens in place, and the UI stays minimal around the document. ✨
 
